@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Neon Harbor — a tiny open-world harbour crime game</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #0b1026; font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; color: #fff; }
+  #game-canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+
+  /* ---------- HUD ---------- */
+  #hud { position: fixed; inset: 0; pointer-events: none; z-index: 5; }
+  #hud-top-right { position: absolute; top: 14px; right: 16px; text-align: right; }
+  #hud-cash { font-size: 30px; font-weight: 800; color: #53d769; text-shadow: 0 2px 6px rgba(0,0,0,.55); letter-spacing: .5px; }
+  #hud-wanted-label { font-size: 11px; letter-spacing: 3px; color: #ffb3ae; visibility: hidden; }
+  #hud-stars { font-size: 24px; color: #5a6270; letter-spacing: 2px; text-shadow: 0 2px 5px rgba(0,0,0,.6); }
+  #hud-stars.has-stars { color: #ffd23e; }
+  #hud-health-wrap { margin-top: 6px; width: 170px; height: 10px; background: rgba(0,0,0,.45); border-radius: 6px; margin-left: auto; overflow: hidden; border: 1px solid rgba(255,255,255,.25); }
+  #hud-health-fill { height: 100%; width: 100%; background: linear-gradient(90deg, #e8433c, #ff7a59); transition: width .2s; }
+  #hud-speed { position: absolute; right: 18px; bottom: 118px; font-size: 26px; font-weight: 700; text-shadow: 0 2px 6px rgba(0,0,0,.6); visibility: hidden; }
+  #hud-objective-box { position: absolute; top: 14px; left: 16px; max-width: 330px; background: rgba(8,14,24,.55); border-left: 4px solid #ffd23e; border-radius: 8px; padding: 10px 12px; backdrop-filter: blur(3px); }
+  #hud-objective-title { font-size: 15px; font-weight: 700; color: #ffd23e; }
+  #hud-objective { font-size: 12.5px; line-height: 1.45; color: #e8eef4; margin-top: 2px; }
+  #hud-objective-time { font-size: 13px; font-weight: 700; color: #ff9d5c; margin-top: 3px; }
+  #minimap { position: absolute; left: 16px; bottom: 16px; width: 168px; height: 168px; border-radius: 50%; border: 3px solid rgba(255,255,255,.35); box-shadow: 0 4px 18px rgba(0,0,0,.5); background: #20303a; }
+  #hud-prompt { position: absolute; left: 50%; bottom: 15%; transform: translateX(-50%); background: rgba(8,14,24,.72); padding: 9px 18px; border-radius: 20px; font-size: 15px; font-weight: 600; visibility: hidden; white-space: nowrap; }
+  #hud-toast { position: absolute; left: 50%; top: 16%; transform: translateX(-50%) translateY(-8px); background: rgba(8,14,24,.8); border: 1px solid rgba(255,210,62,.6); color: #ffe9a8; padding: 10px 20px; border-radius: 10px; font-size: 15px; font-weight: 600; opacity: 0; transition: all .25s; max-width: 86vw; text-align: center; }
+  #hud-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  #hud-bust { position: absolute; left: 50%; bottom: 24%; transform: translateX(-50%); width: 240px; visibility: hidden; text-align: center; }
+  #hud-bust span { font-size: 13px; letter-spacing: 2px; color: #ff8a80; font-weight: 700; text-shadow: 0 1px 4px #000; }
+  #hud-bust-track { height: 9px; background: rgba(0,0,0,.55); border-radius: 5px; overflow: hidden; margin-top: 4px; border: 1px solid rgba(255,255,255,.3); }
+  #hud-bust-fill { height: 100%; width: 0%; background: #ff3b30; }
+
+  /* ---------- overlays ---------- */
+  .overlay { position: fixed; inset: 0; z-index: 10; display: flex; align-items: center; justify-content: center; flex-direction: column; text-align: center; padding: 24px; }
+  #start-screen { background: linear-gradient(180deg, rgba(11,16,38,.25) 0%, rgba(11,16,38,.78) 78%); transition: opacity .4s; }
+  #start-screen.hidden { opacity: 0; pointer-events: none; }
+  .game-title { font-size: clamp(42px, 9vw, 84px); font-weight: 900; letter-spacing: 2px; line-height: 1; background: linear-gradient(92deg, #ffd23e 10%, #ff4d8d 55%, #35e0e6 95%); -webkit-background-clip: text; background-clip: text; color: transparent; text-shadow: none; filter: drop-shadow(0 4px 14px rgba(0,0,0,.45)); }
+  .game-sub { margin-top: 8px; font-size: clamp(13px, 2.4vw, 17px); color: #ffe9a8; letter-spacing: 4px; text-transform: uppercase; }
+  .story { margin-top: 18px; max-width: 560px; font-size: 14.5px; line-height: 1.65; color: #e8eef4; background: rgba(8,14,24,.5); padding: 14px 18px; border-radius: 12px; }
+  .controls { margin-top: 14px; font-size: 13px; line-height: 1.9; color: #c8d4de; }
+  .controls b { color: #fff; background: rgba(255,255,255,.14); border: 1px solid rgba(255,255,255,.3); border-bottom-width: 2px; border-radius: 5px; padding: 0 6px; font-weight: 600; }
+  .big-btn { pointer-events: auto; cursor: pointer; margin-top: 20px; font-size: 19px; font-weight: 800; letter-spacing: 1px; color: #14202e; background: linear-gradient(180deg, #ffd23e, #ffb52e); border: none; border-radius: 30px; padding: 13px 42px; box-shadow: 0 6px 22px rgba(255,178,46,.4); }
+  .big-btn:hover { filter: brightness(1.07); }
+  .ghost-btn { pointer-events: auto; cursor: pointer; margin-top: 10px; font-size: 15px; font-weight: 700; color: #e8eef4; background: rgba(255,255,255,.12); border: 1px solid rgba(255,255,255,.45); border-radius: 30px; padding: 10px 30px; display: none; }
+  #pause-screen, #caught-screen { background: rgba(5,8,16,.72); opacity: 0; pointer-events: none; transition: opacity .3s; }
+  #pause-screen.show, #caught-screen.show { opacity: 1; pointer-events: auto; }
+  .caught-title { font-size: clamp(44px, 10vw, 88px); font-weight: 900; letter-spacing: 10px; color: #ff3b30; text-shadow: 0 4px 22px rgba(255,59,48,.5); }
+  .overlay h2 { font-size: 34px; letter-spacing: 3px; }
+  .overlay p { margin-top: 10px; color: #c8d4de; font-size: 15px; }
+
+  /* ---------- touch controls ---------- */
+  #touch-ui { display: none; }
+  body.has-touch #touch-ui { display: block; }
+  #touch-joy { position: fixed; left: 22px; bottom: 200px; width: 112px; height: 112px; border-radius: 50%; background: rgba(255,255,255,.1); border: 2px solid rgba(255,255,255,.3); z-index: 8; touch-action: none; }
+  #touch-stick { position: absolute; left: 50%; top: 50%; width: 48px; height: 48px; margin: -24px 0 0 -24px; border-radius: 50%; background: rgba(255,255,255,.45); }
+  .touch-btn { position: fixed; z-index: 8; width: 62px; height: 62px; border-radius: 50%; background: rgba(255,255,255,.16); border: 2px solid rgba(255,255,255,.4); color: #fff; font-size: 13px; font-weight: 700; touch-action: none; }
+  #btn-action { right: 24px; bottom: 200px; }
+  #btn-punch { right: 98px; bottom: 168px; }
+  #btn-run { right: 24px; bottom: 278px; }
+  @media (max-width: 640px) {
+    #minimap { width: 118px; height: 118px; }
+    #hud-objective-box { max-width: 230px; }
+    #hud-cash { font-size: 23px; }
+  }
+</style>
+</head>
+<body>
+<canvas id="game-canvas"></canvas>
+
+<div id="hud">
+  <div id="hud-objective-box">
+    <div id="hud-objective-title">Neon Harbor</div>
+    <div id="hud-objective">Loading the harbour…</div>
+    <div id="hud-objective-time"></div>
+  </div>
+  <div id="hud-top-right">
+    <div id="hud-cash">$0</div>
+    <div id="hud-wanted-label">WANTED</div>
+    <div id="hud-stars">☆☆☆☆☆</div>
+    <div id="hud-health-wrap"><div id="hud-health-fill"></div></div>
+  </div>
+  <canvas id="minimap" width="168" height="168"></canvas>
+  <div id="hud-speed">0 km/h</div>
+  <div id="hud-prompt"></div>
+  <div id="hud-toast"></div>
+  <div id="hud-bust"><span>⚠ HARBOUR PATROL — KEEP MOVING ⚠</span><div id="hud-bust-track"><div id="hud-bust-fill"></div></div></div>
+</div>
+
+<div id="touch-ui">
+  <div id="touch-joy"><div id="touch-stick"></div></div>
+  <button class="touch-btn" id="btn-action">E<br>Car</button>
+  <button class="touch-btn" id="btn-punch">F<br>Punch</button>
+  <button class="touch-btn" id="btn-run">Run</button>
+</div>
+
+<div class="overlay" id="start-screen">
+  <div class="game-title">NEON HARBOR</div>
+  <div class="game-sub">Sun · Sea · Side Hustles</div>
+  <div class="story">
+    You are <b>Marina Vale</b>, a dock kid from the Neon Harbor marina. You owe the harbour
+    dispatcher <b>Big Sal</b> for the loan on your runabout — and Sal collects in favours, not cash.
+    Run his driving jobs across the palm-lined avenues, keep the Harbour Patrol off your tail,
+    and work the debt off one gold marker at a time.
+  </div>
+  <div class="controls">
+    <b>W A S D</b> / arrows — walk &amp; drive &nbsp;·&nbsp; <b>Shift</b> — run<br>
+    <b>E</b> — get in / out of car, accept job &nbsp;·&nbsp; <b>F</b> — punch &nbsp;·&nbsp; <b>Space</b> — handbrake<br>
+    Drag mouse — look around &nbsp;·&nbsp; <b>Esc / P</b> — pause
+  </div>
+  <button class="big-btn" id="btn-start">▶ &nbsp;START</button>
+  <button class="ghost-btn" id="btn-continue">CONTINUE SAVED GAME</button>
+</div>
+
+<div class="overlay" id="pause-screen">
+  <h2>PAUSED</h2>
+  <p>Neon Harbor waits for no one — except you, right now.</p>
+  <button class="big-btn" id="btn-resume">RESUME</button>
+</div>
+
+<div class="overlay" id="caught-screen">
+  <div class="caught-title">CAUGHT</div>
+  <p id="caught-fine">Fine paid</p>
+  <p>The Harbour Patrol thanks you for your donation to the pier fund.</p>
+  <button class="big-btn" id="btn-respawn">BACK TO THE STREETS</button>
+</div>
+
+<script src="vendor/three.min.js"></script>
+<script type="module" src="src/main.js"></script>
+</body>
+</html>
